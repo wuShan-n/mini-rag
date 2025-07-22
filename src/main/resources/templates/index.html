@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 智能问答机器人</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .section h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        input[type="file"], input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        textarea {
+            height: 80px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .response {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { color: #007bff; }
+        .source-chunks {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        .chunk {
+            background: #f8f9fa;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 RAG 智能问答机器人</h1>
+        
+        <!-- 文档上传部分 -->
+        <div class="section">
+            <h2>📄 文档上传</h2>
+            <input type="file" id="fileInput" accept=".txt,.pdf" />
+            <button onclick="uploadFile()">上传文档</button>
+            <div id="uploadResponse" class="response" style="display:none;"></div>
+        </div>
+        
+        <!-- 问答部分 -->
+        <div class="section">
+            <h2>💬 智能问答</h2>
+            <textarea id="questionInput" placeholder="请输入您的问题..."></textarea>
+            <button onclick="askQuestion()">提问</button>
+            <div id="chatResponse" class="response" style="display:none;"></div>
+        </div>
+        
+        <!-- API 状态检查 -->
+        <div class="section">
+            <h2>🔍 系统状态</h2>
+            <button onclick="checkHealth()">检查服务状态</button>
+            <div id="healthResponse" class="response" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 上传文档
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const responseDiv = document.getElementById('uploadResponse');
+            
+            if (!fileInput.files[0]) {
+                showResponse(responseDiv, '请选择一个文件', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                showResponse(responseDiv, '正在上传和处理文档...', 'loading');
+                
+                const response = await fetch('/api/documents', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResponse(responseDiv, 
+                        `✅ ${result.message}\n文件名: ${result.fileName}\n处理块数: ${result.chunksCount}`, 
+                        'success');
+                } else {
+                    showResponse(responseDiv, `❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showResponse(responseDiv, `❌ 上传失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 提问
+        async function askQuestion() {
+            const questionInput = document.getElementById('questionInput');
+            const responseDiv = document.getElementById('chatResponse');
+            
+            if (!questionInput.value.trim()) {
+                showResponse(responseDiv, '请输入问题', 'error');
+                return;
+            }
+            
+            try {
+                showResponse(responseDiv, '正在思考中...', 'loading');
+                
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: questionInput.value
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    let responseText = `💡 回答:\n${result.answer}`;
+                    
+                    if (result.sourceChunks && result.sourceChunks.length > 0) {
+                        responseText += '\n\n📚 参考内容:';
+                        result.sourceChunks.forEach((chunk, index) => {
+                            responseText += `\n${index + 1}. ${chunk}`;
+                        });
+                    }
+                    
+                    showResponse(responseDiv, responseText, 'success');
+                } else {
+                    showResponse(responseDiv, `❌ ${result.answer}`, 'error');
+                }
+            } catch (error) {
+                showResponse(responseDiv, `❌ 请求失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 检查服务状态
+        async function checkHealth() {
+            const responseDiv = document.getElementById('healthResponse');
+            
+            try {
+                showResponse(responseDiv, '正在检查...', 'loading');
+                
+                const response = await fetch('/api/health');
+                const result = await response.text();
+                
+                showResponse(responseDiv, `✅ ${result}`, 'success');
+            } catch (error) {
+                showResponse(responseDiv, `❌ 服务不可用: ${error.message}`, 'error');
+            }
+        }
+        
+        // 显示响应
+        function showResponse(element, message, type) {
+            element.textContent = message;
+            element.className = `response ${type}`;
+            element.style.display = 'block';
+        }
+        
+        // 页面加载时检查服务状态
+        window.onload = function() {
+            checkHealth();
+        };
+    </script>
+</body>
+</html> 

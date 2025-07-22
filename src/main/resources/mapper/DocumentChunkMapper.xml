@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.ragchatbot.mapper.DocumentChunkMapper">
+
+    <resultMap id="DocumentChunkResultMap" type="com.example.ragchatbot.model.DocumentChunk">
+        <id property="id" column="id"/>
+        <result property="content" column="content"/>
+        <result property="sourceDocument" column="source_document"/>
+        <result property="embedding" column="embedding" typeHandler="com.example.ragchatbot.typehandler.PGvectorTypeHandler"/>
+    </resultMap>
+
+    <insert id="save" parameterType="com.example.ragchatbot.model.DocumentChunk">
+        INSERT INTO document_chunk (content, source_document, embedding)
+        VALUES (#{content}, #{sourceDocument}, #{embedding, typeHandler=com.example.ragchatbot.typehandler.PGvectorTypeHandler})
+    </insert>
+
+    <select id="findNearestNeighbors" resultMap="DocumentChunkResultMap">
+        SELECT *
+        FROM document_chunk
+        ORDER BY embedding &lt;=&gt; CAST(#{embedding} AS vector)
+            LIMIT #{limit}
+    </select>
+
+    <select id="findBySourceDocument" resultMap="DocumentChunkResultMap">
+        SELECT *
+        FROM document_chunk
+        WHERE source_document = #{sourceDocument}
+    </select>
+
+    <delete id="deleteBySourceDocument">
+        DELETE
+        FROM document_chunk
+        WHERE source_document = #{sourceDocument}
+    </delete>
+
+</mapper>
